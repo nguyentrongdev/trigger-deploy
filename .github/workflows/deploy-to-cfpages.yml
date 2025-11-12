@@ -81,7 +81,7 @@ jobs:
       contents: read
       deployments: write
     outputs:
-      project_name: ${{ secrets.PROJECT_NAME }}
+      project_name: thieponline
       deployment_url: ${{ steps.cloudflare.outputs.url }}
     
     steps:
@@ -339,7 +339,7 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+          PROJECT_NAME: thieponline
         run: |
           echo "Checking if project '$PROJECT_NAME' exists..."
           
@@ -390,7 +390,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ secrets.PROJECT_NAME }}
+          projectName: thieponline
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.event.inputs.branch || github.ref_name }}
@@ -402,7 +402,7 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+          PROJECT_NAME: thieponline
         run: |
           # Hardcode domain
           ROOT_DOMAIN="poswebs.uk"
@@ -527,7 +527,7 @@ jobs:
           # Hardcode domain
           ROOT_DOMAIN="poswebs.uk"
           
-          PROJECT_NAME="${{ secrets.PROJECT_NAME }}"
+          PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           # Create slug: convert / to -, _ to -, and lowercase
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
@@ -590,7 +590,7 @@ jobs:
           # Hardcode domain
           ROOT_DOMAIN="poswebs.uk"
           
-          PROJECT_NAME="${{ secrets.PROJECT_NAME }}"
+          PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           # Create slug: convert / to -, _ to -, and lowercase
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
