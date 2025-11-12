@@ -28,12 +28,12 @@ jobs:
         id: check
         env:
           BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           echo "Checking if branch exists: $BRANCH"
           
           # Fetch all branches from remote using GitHub API
-          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          curl -s -H "Authorization: Bearer $GH_PAT" \
             "https://api.github.com/repos/nguyentrongdev/thieponline/branches" | \
             jq -r '.[].name' > branches.txt
           
