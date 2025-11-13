@@ -259,19 +259,23 @@ jobs:
             OG_URL="${OG_URL:-https://${SUBDOMAIN}.thieponline.org}"
           fi
           
-          echo "📋 Extracted Meta Information:"
-          echo "  • Name: $NAME"
-          echo "  • Slug: $SUBDOMAIN"
-          echo "  • Meta Description: $DESCRIPTION"
-          echo "  • Keywords: $KEYWORDS"
-          echo "  • Author: $AUTHOR"
-          echo "  • OG Title: $OG_TITLE"
-          echo "  • OG Description: $OG_DESCRIPTION"
-          echo "  • OG Image: $OG_IMAGE"
-          echo "  • OG URL: $OG_URL"
-          echo "  • OG Type: $OG_TYPE"
-          echo "  • Zalo OG Image: $ZALO_OG_IMAGE"
-          echo "  • Image Src: $IMAGE_SRC"
+          echo ""
+          echo "📋 EXTRACTED META INFORMATION DEBUG:"
+          echo "========================================="
+          echo "Name: $NAME"
+          echo "Slug: $SUBDOMAIN"
+          echo "Meta Description: $DESCRIPTION"
+          echo "Keywords: $KEYWORDS"
+          echo "Author: $AUTHOR"
+          echo "OG Title: $OG_TITLE"
+          echo "OG Description: $OG_DESCRIPTION"
+          echo "OG Image: $OG_IMAGE"
+          echo "OG URL: $OG_URL"
+          echo "OG Type: $OG_TYPE"
+          echo "Zalo OG Image: $ZALO_OG_IMAGE"
+          echo "Image Src: $IMAGE_SRC"
+          echo "========================================="
+          echo ""
           
           # Build JSON payload
           JSON_PAYLOAD=$(cat <<EOF
@@ -294,6 +298,12 @@ jobs:
           
           echo ""
           echo "📤 Sending to API..."
+          echo ""
+          echo "🔍 JSON PAYLOAD DEBUG:"
+          echo "========================================="
+          echo "$JSON_PAYLOAD" | jq '.' || echo "$JSON_PAYLOAD"
+          echo "========================================="
+          echo ""
           
           # Check if ADMIN_TOKEN_API is set
           if [ -z "$ADMIN_TOKEN_API" ]; then
@@ -302,6 +312,10 @@ jobs:
           fi
           
           # Send to API with authentication
+          echo "📡 Sending POST request to: https://api.thieponline.org/admin/templates"
+          echo "🔑 Authorization: Bearer ***HIDDEN***"
+          echo ""
+          
           API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             'https://api.thieponline.org/admin/templates' \
             -H 'accept: application/json' \
@@ -313,9 +327,15 @@ jobs:
           HTTP_CODE=$(echo "$API_RESPONSE" | tail -n1)
           RESPONSE_BODY=$(echo "$API_RESPONSE" | sed '$d')
           
-          echo "📊 API Response:"
-          echo "  • Status Code: $HTTP_CODE"
-          echo "  • Response: $RESPONSE_BODY"
+          echo ""
+          echo "📊 API RESPONSE DEBUG:"
+          echo "========================================="
+          echo "Status Code: $HTTP_CODE"
+          echo ""
+          echo "Response Body (formatted):"
+          echo "$RESPONSE_BODY" | jq '.' 2>/dev/null || echo "$RESPONSE_BODY"
+          echo "========================================="
+          echo ""
           
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             echo "✅ Meta information sent successfully!"
