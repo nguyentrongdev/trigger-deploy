@@ -299,11 +299,6 @@ jobs:
           echo ""
           echo "📤 Sending to API..."
           echo ""
-          echo "🔍 JSON PAYLOAD DEBUG:"
-          echo "========================================="
-          echo "$JSON_PAYLOAD" | jq '.' || echo "$JSON_PAYLOAD"
-          echo "========================================="
-          echo ""
           
           # Check if ADMIN_TOKEN_API is set
           if [ -z "$ADMIN_TOKEN_API" ]; then
@@ -311,17 +306,72 @@ jobs:
             exit 0
           fi
           
-          # Send to API with authentication (matching fetch implementation)
+          # Validate token format (should not have spaces or newlines)
+          TOKEN_LENGTH=${#ADMIN_TOKEN_API}
+          echo "🔑 Token validation:"
+          echo "  - Token length: $TOKEN_LENGTH characters"
+          echo "  - Token prefix: ${ADMIN_TOKEN_API:0:10}..."
+          
+          if [[ "$ADMIN_TOKEN_API" =~ [[:space:]] ]]; then
+            echo "⚠️ WARNING: Token contains whitespace characters!"
+          fi
+          
+          echo ""
+          echo "🔍 JSON PAYLOAD DEBUG (before escaping):"
+          echo "========================================="
+          echo "$JSON_PAYLOAD" | jq '.' || echo "$JSON_PAYLOAD"
+          echo "========================================="
+          echo ""
+          
+          # Rebuild JSON properly with jq to ensure proper escaping
+          echo "🔧 Rebuilding JSON with proper escaping..."
+          JSON_PAYLOAD=$(jq -n \
+            --arg name "$NAME" \
+            --arg slug "$SUBDOMAIN" \
+            --arg metaDescription "$DESCRIPTION" \
+            --arg metaKeywords "$KEYWORDS" \
+            --arg metaAuthor "$AUTHOR" \
+            --arg ogTitle "$OG_TITLE" \
+            --arg ogDescription "$OG_DESCRIPTION" \
+            --arg ogImage "$OG_IMAGE" \
+            --arg ogUrl "$OG_URL" \
+            --arg ogType "$OG_TYPE" \
+            --arg zaloOgImage "$ZALO_OG_IMAGE" \
+            --arg imageSrc "$IMAGE_SRC" \
+            '{
+              name: $name,
+              slug: $slug,
+              metaDescription: $metaDescription,
+              metaKeywords: $metaKeywords,
+              metaAuthor: $metaAuthor,
+              ogTitle: $ogTitle,
+              ogDescription: $ogDescription,
+              ogImage: $ogImage,
+              ogUrl: $ogUrl,
+              ogType: $ogType,
+              zaloOgImage: $zaloOgImage,
+              imageSrc: $imageSrc
+            }')
+          
+          echo "🔍 JSON PAYLOAD DEBUG (after proper escaping):"
+          echo "========================================="
+          echo "$JSON_PAYLOAD" | jq '.'
+          echo "========================================="
+          echo ""
+          
+          # Send to API with authentication
           echo "📡 Sending POST request to: https://api.thieponline.org/admin/templates"
           echo "🔑 Authorization: Bearer ***HIDDEN***"
           echo ""
           
-          # Simple request with only required headers (like the fetch example)
+          # Request with proper headers and verbose error info
           API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             'https://api.thieponline.org/admin/templates' \
-            -H 'Content-Type: application/json' \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -H 'Accept: application/json' \
             -H "Authorization: Bearer $ADMIN_TOKEN_API" \
-            -d "$JSON_PAYLOAD")
+            -H 'User-Agent: GitHub-Actions' \
+            --data-raw "$JSON_PAYLOAD")
           
           # Extract HTTP status code (last line)
           HTTP_CODE=$(echo "$API_RESPONSE" | tail -n1)
@@ -332,17 +382,48 @@ jobs:
           echo "========================================="
           echo "Status Code: $HTTP_CODE"
           echo ""
+          echo "Response Body (raw):"
+          echo "$RESPONSE_BODY"
+          echo ""
           echo "Response Body (formatted):"
           echo "$RESPONSE_BODY" | jq '.' 2>/dev/null || echo "$RESPONSE_BODY"
           echo "========================================="
           echo ""
           
+          # Detailed status code analysis
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             echo "✅ Meta information sent successfully!"
+          elif [ "$HTTP_CODE" == "401" ]; then
+            echo "❌ API request failed: 401 Unauthorized"
+            echo "🔍 Token không hợp lệ hoặc đã hết hạn"
+            echo "💡 Giải pháp: Kiểm tra lại secret ADMIN_TOKEN_API trong GitHub repository settings"
+          elif [ "$HTTP_CODE" == "403" ]; then
+            echo "❌ API request failed: 403 Forbidden"
+            echo "🔍 Nguyên nhân có thể:"
+            echo "   1. Token không có quyền truy cập endpoint này"
+            echo "   2. Token đúng nhưng thiếu permissions (scopes)"
+            echo "   3. API server đang chặn request từ GitHub Actions IP"
+            echo "   4. Payload size quá lớn hoặc chứa nội dung bị chặn"
+            echo ""
+            echo "💡 Giải pháp:"
+            echo "   - Kiểm tra token có quyền 'admin' chưa"
+            echo "   - Test API bằng curl/Postman với cùng token để xác nhận"
+            echo "   - Kiểm tra API logs để xem lý do cụ thể"
+            echo "   - Xem response body bên trên để biết thêm chi tiết"
+          elif [ "$HTTP_CODE" == "400" ]; then
+            echo "❌ API request failed: 400 Bad Request"
+            echo "🔍 Request payload không hợp lệ"
+            echo "💡 Xem response body bên trên để biết field nào bị lỗi"
+          elif [ "$HTTP_CODE" == "500" ]; then
+            echo "❌ API request failed: 500 Internal Server Error"
+            echo "🔍 Lỗi từ phía API server"
+            echo "💡 Kiểm tra API server logs"
           else
             echo "⚠️ API request failed with status code: $HTTP_CODE"
-            echo "ℹ️ Continuing deployment anyway..."
           fi
+          
+          echo ""
+          echo "ℹ️ Continuing deployment anyway..."
       
       # 7. Set Project Name (Fixed)
       - name: 📝 Set Project Name
