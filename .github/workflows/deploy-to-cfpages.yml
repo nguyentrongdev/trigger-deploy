@@ -213,59 +213,48 @@ jobs:
           cat "$HTML_FILE" | tr '\n' ' ' | sed 's/  */ /g' > "$TEMP_HTML"
           
           echo "🔎 Extracting meta tags from HTML..."
-          
-          # Function to extract meta content (hoạt động với HTML có hoặc không có newlines)
-          extract_meta() {
-            local attr_name="$1"
-            local attr_value="$2"
-            grep -oP "(?<=<meta[^>]*${attr_name}=\"${attr_value}\"[^>]*content=\")[^\"]*" "$TEMP_HTML" | head -1
-          }
-          
-          extract_meta_property() {
-            local property="$1"
-            grep -oP "(?<=<meta[^>]*property=\"${property}\"[^>]*content=\")[^\"]*" "$TEMP_HTML" | head -1
-          }
+          echo ""
           
           # Extract title
-          TITLE=$(grep -oP '(?<=<title>)[^<]*' "$TEMP_HTML" | head -1 | sed 's/^ *//;s/ *$//')
+          TITLE=$(grep -oP '(?<=<title>)[^<]*' "$TEMP_HTML" 2>/dev/null | head -1 | sed 's/^ *//;s/ *$//')
           echo "  ✓ Title: ${TITLE:-[empty]}"
           
-          # Extract standard meta tags
-          DESCRIPTION=$(extract_meta "name" "description")
+          # Extract standard meta tags (dùng grep -P, có sẵn trên Ubuntu)
+          DESCRIPTION=$(grep -oP '(?<=<meta[^>]*name="description"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ Description: ${DESCRIPTION:0:80}${DESCRIPTION:+...}"
           
-          KEYWORDS=$(extract_meta "name" "keywords")
+          KEYWORDS=$(grep -oP '(?<=<meta[^>]*name="keywords"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ Keywords: ${KEYWORDS:-[empty]}"
           
-          AUTHOR=$(extract_meta "name" "author")
+          AUTHOR=$(grep -oP '(?<=<meta[^>]*name="author"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ Author: ${AUTHOR:-[empty]}"
           
           # Extract Open Graph tags
-          OG_TITLE=$(extract_meta_property "og:title")
+          OG_TITLE=$(grep -oP '(?<=<meta[^>]*property="og:title"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ OG Title: ${OG_TITLE:-[empty]}"
           
-          OG_DESCRIPTION=$(extract_meta_property "og:description")
+          OG_DESCRIPTION=$(grep -oP '(?<=<meta[^>]*property="og:description"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ OG Description: ${OG_DESCRIPTION:0:50}${OG_DESCRIPTION:+...}"
           
-          OG_IMAGE=$(extract_meta_property "og:image")
+          OG_IMAGE=$(grep -oP '(?<=<meta[^>]*property="og:image"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ OG Image: ${OG_IMAGE:-[empty]}"
           
-          OG_URL=$(extract_meta_property "og:url")
+          OG_URL=$(grep -oP '(?<=<meta[^>]*property="og:url"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ OG URL: ${OG_URL:-[empty]}"
           
-          OG_TYPE=$(extract_meta_property "og:type")
+          OG_TYPE=$(grep -oP '(?<=<meta[^>]*property="og:type"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ OG Type: ${OG_TYPE:-[empty]}"
           
-          # Extract Zalo OG image (property chính xác là "zalo:og:image", không phải "zalo:image")
-          ZALO_OG_IMAGE=$(extract_meta_property "zalo:og:image")
+          # Extract Zalo OG image (property chính xác là "zalo:og:image")
+          ZALO_OG_IMAGE=$(grep -oP '(?<=<meta[^>]*property="zalo:og:image"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           echo "  ✓ Zalo OG Image: ${ZALO_OG_IMAGE:-[empty]}"
           
-          # Extract first image from content (if any) as imageSrc
-          IMAGE_SRC=$(grep -oP '(?<=<img[^>]*src=\")[^\"]*' "$TEMP_HTML" | head -1)
+          # Extract first image from content
+          IMAGE_SRC=$(grep -oP '(?<=<img[^>]*src=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           
           # Nếu không có img tag, thử lấy từ link rel="image_src"
           if [ -z "$IMAGE_SRC" ]; then
-            IMAGE_SRC=$(grep -oP '(?<=<link[^>]*rel="image_src"[^>]*href=\")[^\"]*' "$TEMP_HTML" | head -1)
+            IMAGE_SRC=$(grep -oP '(?<=<link[^>]*rel="image_src"[^>]*href=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
           fi
           echo "  ✓ Image Src: ${IMAGE_SRC:-[empty]}"
           
