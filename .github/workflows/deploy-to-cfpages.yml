@@ -254,9 +254,9 @@ jobs:
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
           
           if [ "$BRANCH_NAME" == "main" ]; then
-            OG_URL="${OG_URL:-https://poswebs.uk}"
+            OG_URL="${OG_URL:-https://thieponline.org}"
           else
-            OG_URL="${OG_URL:-https://${SUBDOMAIN}.poswebs.uk}"
+            OG_URL="${OG_URL:-https://${SUBDOMAIN}.thieponline.org}"
           fi
           
           echo "📋 Extracted Meta Information:"
@@ -303,7 +303,7 @@ jobs:
           
           # Send to API with authentication
           API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            'https://api.thieponline.poswebs.uk/admin/templates' \
+            'https://api.thieponline.org/admin/templates' \
             -H 'accept: application/json' \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer $ADMIN_TOKEN_API" \
@@ -405,7 +405,7 @@ jobs:
           PROJECT_NAME: thieponline
         run: |
           # Hardcode domain
-          ROOT_DOMAIN="poswebs.uk"
+          ROOT_DOMAIN="thieponline.org"
           
           echo "🌐 Using hardcoded domain: $ROOT_DOMAIN"
           echo "✅ Domain is confirmed to exist in Cloudflare"
@@ -525,7 +525,7 @@ jobs:
         if: always()
         run: |
           # Hardcode domain
-          ROOT_DOMAIN="poswebs.uk"
+          ROOT_DOMAIN="thieponline.org"
           
           PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
@@ -588,7 +588,7 @@ jobs:
           fi
           
           # Hardcode domain
-          ROOT_DOMAIN="poswebs.uk"
+          ROOT_DOMAIN="thieponline.org"
           
           PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
