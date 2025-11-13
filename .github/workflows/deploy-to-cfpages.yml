@@ -311,23 +311,16 @@ jobs:
             exit 0
           fi
           
-          # Send to API with authentication
+          # Send to API with authentication (matching fetch implementation)
           echo "📡 Sending POST request to: https://api.thieponline.org/admin/templates"
           echo "🔑 Authorization: Bearer ***HIDDEN***"
           echo ""
           
-          # Add headers to bypass Cloudflare protection
+          # Simple request with only required headers (like the fetch example)
           API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             'https://api.thieponline.org/admin/templates' \
-            -H 'accept: application/json' \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer $ADMIN_TOKEN_API" \
-            -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' \
-            -H 'Accept-Language: en-US,en;q=0.9' \
-            -H 'Origin: https://thieponline.org' \
-            -H 'Referer: https://thieponline.org/' \
-            -H 'Cache-Control: no-cache' \
-            -H 'Pragma: no-cache' \
             -d "$JSON_PAYLOAD")
           
           # Extract HTTP status code (last line)
