@@ -207,38 +207,72 @@ jobs:
             exit 0
           fi
           
-          # Function to extract meta content
+          # Tạo temporary file với HTML đã loại bỏ newlines trong meta tags
+          # Để xử lý HTML có attributes trên nhiều dòng
+          TEMP_HTML=$(mktemp)
+          cat "$HTML_FILE" | tr '\n' ' ' | sed 's/  */ /g' > "$TEMP_HTML"
+          
+          echo "🔎 Extracting meta tags from HTML..."
+          
+          # Function to extract meta content (hoạt động với HTML có hoặc không có newlines)
           extract_meta() {
             local attr_name="$1"
             local attr_value="$2"
-            grep -oP "(?<=<meta[^>]*${attr_name}=\"${attr_value}\"[^>]*content=\")[^\"]*" "$HTML_FILE" | head -1
+            grep -oP "(?<=<meta[^>]*${attr_name}=\"${attr_value}\"[^>]*content=\")[^\"]*" "$TEMP_HTML" | head -1
           }
           
           extract_meta_property() {
             local property="$1"
-            grep -oP "(?<=<meta[^>]*property=\"${property}\"[^>]*content=\")[^\"]*" "$HTML_FILE" | head -1
+            grep -oP "(?<=<meta[^>]*property=\"${property}\"[^>]*content=\")[^\"]*" "$TEMP_HTML" | head -1
           }
           
           # Extract title
-          TITLE=$(grep -oP '(?<=<title>)[^<]*' "$HTML_FILE" | head -1)
+          TITLE=$(grep -oP '(?<=<title>)[^<]*' "$TEMP_HTML" | head -1 | sed 's/^ *//;s/ *$//')
+          echo "  ✓ Title: ${TITLE:-[empty]}"
           
           # Extract standard meta tags
           DESCRIPTION=$(extract_meta "name" "description")
+          echo "  ✓ Description: ${DESCRIPTION:0:80}${DESCRIPTION:+...}"
+          
           KEYWORDS=$(extract_meta "name" "keywords")
+          echo "  ✓ Keywords: ${KEYWORDS:-[empty]}"
+          
           AUTHOR=$(extract_meta "name" "author")
+          echo "  ✓ Author: ${AUTHOR:-[empty]}"
           
           # Extract Open Graph tags
           OG_TITLE=$(extract_meta_property "og:title")
-          OG_DESCRIPTION=$(extract_meta_property "og:description")
-          OG_IMAGE=$(extract_meta_property "og:image")
-          OG_URL=$(extract_meta_property "og:url")
-          OG_TYPE=$(extract_meta_property "og:type")
+          echo "  ✓ OG Title: ${OG_TITLE:-[empty]}"
           
-          # Extract Zalo OG image
-          ZALO_OG_IMAGE=$(extract_meta_property "zalo:image")
+          OG_DESCRIPTION=$(extract_meta_property "og:description")
+          echo "  ✓ OG Description: ${OG_DESCRIPTION:0:50}${OG_DESCRIPTION:+...}"
+          
+          OG_IMAGE=$(extract_meta_property "og:image")
+          echo "  ✓ OG Image: ${OG_IMAGE:-[empty]}"
+          
+          OG_URL=$(extract_meta_property "og:url")
+          echo "  ✓ OG URL: ${OG_URL:-[empty]}"
+          
+          OG_TYPE=$(extract_meta_property "og:type")
+          echo "  ✓ OG Type: ${OG_TYPE:-[empty]}"
+          
+          # Extract Zalo OG image (property chính xác là "zalo:og:image", không phải "zalo:image")
+          ZALO_OG_IMAGE=$(extract_meta_property "zalo:og:image")
+          echo "  ✓ Zalo OG Image: ${ZALO_OG_IMAGE:-[empty]}"
           
           # Extract first image from content (if any) as imageSrc
-          IMAGE_SRC=$(grep -oP '(?<=<img[^>]*src=\")[^\"]*' "$HTML_FILE" | head -1)
+          IMAGE_SRC=$(grep -oP '(?<=<img[^>]*src=\")[^\"]*' "$TEMP_HTML" | head -1)
+          
+          # Nếu không có img tag, thử lấy từ link rel="image_src"
+          if [ -z "$IMAGE_SRC" ]; then
+            IMAGE_SRC=$(grep -oP '(?<=<link[^>]*rel="image_src"[^>]*href=\")[^\"]*' "$TEMP_HTML" | head -1)
+          fi
+          echo "  ✓ Image Src: ${IMAGE_SRC:-[empty]}"
+          
+          # Clean up temp file
+          rm -f "$TEMP_HTML"
+          
+          echo ""
           
           # Use title as name if not extracted
           NAME="${TITLE:-Thiệp Online}"
