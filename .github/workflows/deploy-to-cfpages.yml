@@ -448,7 +448,7 @@ jobs:
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.event.inputs.branch || github.ref_name }}
-          wranglerVersion: '3'
+          wranglerVersion: '4'
       
       # 10. Setup custom domain for all branches
       - name: 🌐 Configure Custom Domain
