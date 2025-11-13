@@ -211,46 +211,33 @@ jobs:
           echo "📦 Installing cheerio..."
           npm install cheerio --silent
           
-          # Create Node.js script to parse HTML
-          cat > extract-meta.js << 'NODEJS_SCRIPT'
-const fs = require('fs');
-const cheerio = require('cheerio');
-
-// Read HTML file
-const htmlFile = process.argv[2];
-const html = fs.readFileSync(htmlFile, 'utf-8');
-
-// Load HTML with cheerio
-const $ = cheerio.load(html);
-
-// Extract metadata
-const metadata = {
-  title: $('title').text().trim(),
-  description: $('meta[name="description"]').attr('content') || '',
-  keywords: $('meta[name="keywords"]').attr('content') || '',
-  author: $('meta[name="author"]').attr('content') || '',
-  ogTitle: $('meta[property="og:title"]').attr('content') || '',
-  ogDescription: $('meta[property="og:description"]').attr('content') || '',
-  ogImage: $('meta[property="og:image"]').attr('content') || '',
-  ogUrl: $('meta[property="og:url"]').attr('content') || '',
-  ogType: $('meta[property="og:type"]').attr('content') || '',
-  zaloOgImage: $('meta[property="zalo:og:image"]').attr('content') || '',
-  imageSrc: $('link[rel="image_src"]').attr('href') || '',
-  firstImgSrc: $('img').first().attr('src') || ''
-};
-
-// Output as JSON
-console.log(JSON.stringify(metadata, null, 2));
-NODEJS_SCRIPT
-          
-          # Run Node.js script to extract metadata
+          # Run Node.js to parse HTML with cheerio
           echo "🔍 Parsing HTML với Node.js + Cheerio..."
-          EXTRACTED_META=$(node extract-meta.js "$HTML_FILE")
+          EXTRACTED_META=$(node -e "
+            const fs = require('fs');
+            const cheerio = require('cheerio');
+            const html = fs.readFileSync('$HTML_FILE', 'utf-8');
+            const \$ = cheerio.load(html);
+            const metadata = {
+              title: \$('title').text().trim(),
+              description: \$('meta[name=\"description\"]').attr('content') || '',
+              keywords: \$('meta[name=\"keywords\"]').attr('content') || '',
+              author: \$('meta[name=\"author\"]').attr('content') || '',
+              ogTitle: \$('meta[property=\"og:title\"]').attr('content') || '',
+              ogDescription: \$('meta[property=\"og:description\"]').attr('content') || '',
+              ogImage: \$('meta[property=\"og:image\"]').attr('content') || '',
+              ogUrl: \$('meta[property=\"og:url\"]').attr('content') || '',
+              ogType: \$('meta[property=\"og:type\"]').attr('content') || '',
+              zaloOgImage: \$('meta[property=\"zalo:og:image\"]').attr('content') || '',
+              imageSrc: \$('link[rel=\"image_src\"]').attr('href') || '',
+              firstImgSrc: \$('img').first().attr('src') || ''
+            };
+            console.log(JSON.stringify(metadata, null, 2));
+          ")
           
           if [ $? -ne 0 ]; then
             echo "❌ Failed to parse HTML file"
             echo "ℹ️ Skipping meta extraction..."
-            rm -f extract-meta.js
             exit 0
           fi
           
