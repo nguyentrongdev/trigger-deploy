@@ -207,42 +207,98 @@ jobs:
             exit 0
           fi
           
-          TEMP_HTML=$(mktemp)
-          tr '\n' ' ' < "$HTML_FILE" | sed 's/  */ /g' > "$TEMP_HTML"
+          # Install cheerio for HTML parsing
+          echo "📦 Installing cheerio..."
+          npm install cheerio --silent
           
-          TITLE=$(grep -oP '(?<=<title>)[^<]*' "$TEMP_HTML" 2>/dev/null | head -1 | sed 's/^ *//;s/ *$//')
-          DESCRIPTION=$(grep -oP '(?<=<meta[^>]*name="description"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          KEYWORDS=$(grep -oP '(?<=<meta[^>]*name="keywords"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          AUTHOR=$(grep -oP '(?<=<meta[^>]*name="author"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          OG_TITLE=$(grep -oP '(?<=<meta[^>]*property="og:title"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          OG_DESCRIPTION=$(grep -oP '(?<=<meta[^>]*property="og:description"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          OG_IMAGE=$(grep -oP '(?<=<meta[^>]*property="og:image"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          OG_URL=$(grep -oP '(?<=<meta[^>]*property="og:url"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          OG_TYPE=$(grep -oP '(?<=<meta[^>]*property="og:type"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          ZALO_OG_IMAGE=$(grep -oP '(?<=<meta[^>]*property="zalo:og:image"[^>]*content=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
-          IMAGE_SRC=$(grep -oP '(?<=<img[^>]*src=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
+          # Create Node.js script to parse HTML
+          cat > extract-meta.js << 'NODEJS_SCRIPT'
+const fs = require('fs');
+const cheerio = require('cheerio');
+
+// Read HTML file
+const htmlFile = process.argv[2];
+const html = fs.readFileSync(htmlFile, 'utf-8');
+
+// Load HTML with cheerio
+const $ = cheerio.load(html);
+
+// Extract metadata
+const metadata = {
+  title: $('title').text().trim(),
+  description: $('meta[name="description"]').attr('content') || '',
+  keywords: $('meta[name="keywords"]').attr('content') || '',
+  author: $('meta[name="author"]').attr('content') || '',
+  ogTitle: $('meta[property="og:title"]').attr('content') || '',
+  ogDescription: $('meta[property="og:description"]').attr('content') || '',
+  ogImage: $('meta[property="og:image"]').attr('content') || '',
+  ogUrl: $('meta[property="og:url"]').attr('content') || '',
+  ogType: $('meta[property="og:type"]').attr('content') || '',
+  zaloOgImage: $('meta[property="zalo:og:image"]').attr('content') || '',
+  imageSrc: $('link[rel="image_src"]').attr('href') || '',
+  firstImgSrc: $('img').first().attr('src') || ''
+};
+
+// Output as JSON
+console.log(JSON.stringify(metadata, null, 2));
+NODEJS_SCRIPT
           
-          if [ -z "$IMAGE_SRC" ]; then
-            IMAGE_SRC=$(grep -oP '(?<=<link[^>]*rel="image_src"[^>]*href=")[^"]*' "$TEMP_HTML" 2>/dev/null | head -1)
+          # Run Node.js script to extract metadata
+          echo "🔍 Parsing HTML với Node.js + Cheerio..."
+          EXTRACTED_META=$(node extract-meta.js "$HTML_FILE")
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to parse HTML file"
+            echo "ℹ️ Skipping meta extraction..."
+            rm -f extract-meta.js
+            exit 0
           fi
           
-          rm -f "$TEMP_HTML"
+          echo "✅ HTML parsed successfully"
+          echo ""
+          echo "📋 EXTRACTED METADATA:"
+          echo "========================================="
+          echo "$EXTRACTED_META" | jq '.'
+          echo "========================================="
+          echo ""
           
+          # Extract values from JSON
+          TITLE=$(echo "$EXTRACTED_META" | jq -r '.title // ""')
+          DESCRIPTION=$(echo "$EXTRACTED_META" | jq -r '.description // ""')
+          KEYWORDS=$(echo "$EXTRACTED_META" | jq -r '.keywords // ""')
+          AUTHOR=$(echo "$EXTRACTED_META" | jq -r '.author // ""')
+          OG_TITLE=$(echo "$EXTRACTED_META" | jq -r '.ogTitle // ""')
+          OG_DESCRIPTION=$(echo "$EXTRACTED_META" | jq -r '.ogDescription // ""')
+          OG_IMAGE=$(echo "$EXTRACTED_META" | jq -r '.ogImage // ""')
+          OG_URL=$(echo "$EXTRACTED_META" | jq -r '.ogUrl // ""')
+          OG_TYPE=$(echo "$EXTRACTED_META" | jq -r '.ogType // ""')
+          ZALO_OG_IMAGE=$(echo "$EXTRACTED_META" | jq -r '.zaloOgImage // ""')
+          IMAGE_SRC=$(echo "$EXTRACTED_META" | jq -r '.imageSrc // ""')
+          FIRST_IMG_SRC=$(echo "$EXTRACTED_META" | jq -r '.firstImgSrc // ""')
+          
+          # Fallback logic
           NAME="${TITLE:-Thiệp Online}"
           DESCRIPTION="${DESCRIPTION:-Thiệp Online - Website thiệp điện tử}"
           OG_TITLE="${OG_TITLE:-$TITLE}"
           OG_DESCRIPTION="${OG_DESCRIPTION:-$DESCRIPTION}"
           OG_TYPE="${OG_TYPE:-website}"
           
+          # Use image_src, if empty use first img src, if still empty use og:image
+          if [ -z "$IMAGE_SRC" ]; then
+            IMAGE_SRC="${FIRST_IMG_SRC:-$OG_IMAGE}"
+          fi
+          
+          # Determine subdomain and URL based on branch
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
           
           if [ "$BRANCH_NAME" == "main" ]; then
-            OG_URL="${OG_URL:-https://thieponline.org}"
+            FINAL_OG_URL="${OG_URL:-https://thieponline.org}"
           else
-            OG_URL="${OG_URL:-https://${SUBDOMAIN}.thieponline.org}"
+            FINAL_OG_URL="${OG_URL:-https://${SUBDOMAIN}.thieponline.org}"
           fi
           
+          # Build JSON payload
           JSON_PAYLOAD=$(jq -n \
             --arg name "$NAME" \
             --arg slug "$SUBDOMAIN" \
@@ -252,7 +308,7 @@ jobs:
             --arg ogTitle "$OG_TITLE" \
             --arg ogDescription "$OG_DESCRIPTION" \
             --arg ogImage "$OG_IMAGE" \
-            --arg ogUrl "$OG_URL" \
+            --arg ogUrl "$FINAL_OG_URL" \
             --arg ogType "$OG_TYPE" \
             --arg zaloOgImage "$ZALO_OG_IMAGE" \
             --arg imageSrc "$IMAGE_SRC" \
@@ -272,14 +328,17 @@ jobs:
             }')
           
           echo ""
-          echo "📋 META PAYLOAD PREVIEW:"
+          echo "📋 FINAL META PAYLOAD:"
           echo "========================================="
           echo "$JSON_PAYLOAD" | jq '.'
           echo "========================================="
           echo ""
           
           echo "$JSON_PAYLOAD" > meta-payload.json
-          echo "💾 Payload saved to meta-payload.json."
+          echo "💾 Payload saved to meta-payload.json"
+          
+          # Cleanup
+          rm -f extract-meta.js
           
           if [ -z "$ADMIN_TOKEN_API" ]; then
             echo "⚠️ ADMIN_TOKEN_API not configured, skipping API call..."
