@@ -83,8 +83,10 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
+          repository: nguyentrongdev/thieponline
           ref: admin
-          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0  # Fetch all history for all branches
 
       # 2. Setup Node.js
       - name: 🔧 Setup Node.js
