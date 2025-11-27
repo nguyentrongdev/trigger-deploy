@@ -32,7 +32,7 @@ jobs:
 
           # Fetch all branches from remote using GitHub API
           curl -s -H "Authorization: Bearer $GH_PAT" \
-            "https://api.github.com/repos/${{ github.repository }}/branches" | \
+            "https://api.github.com/repos/nguyentrongdev/thieponline/branches" | \
             jq -r '.[].name' > branches.txt
 
           echo "📋 Available branches:"
@@ -104,8 +104,12 @@ jobs:
       - name: 🏗️ Build Vite React App
         env:
           NODE_ENV: production
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
         run: |
           echo "Building Vite React application..."
+          echo "🔧 Environment variables:"
+          echo "  VITE_API_BASE_URL: $VITE_API_BASE_URL"
+
           npm run build
 
           echo "✅ Build complete"
