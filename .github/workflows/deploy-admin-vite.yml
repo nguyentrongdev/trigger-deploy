@@ -1,0 +1,391 @@
+name: Deploy Admin Vite React to Cloudflare Pages
+run-name: ${{ github.workflow }} (admin branch)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  # Auto trigger when push to admin branch
+  push:
+    branches:
+      - admin
+
+jobs:
+  validate-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      branch_exists: ${{ steps.check.outputs.exists }}
+      branch_name: ${{ steps.check.outputs.branch }}
+
+    steps:
+      # Validate branch existence
+      - name: 🔍 Validate Branch
+        id: check
+        env:
+          BRANCH: admin
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          echo "Checking if branch exists: $BRANCH"
+
+          # Fetch all branches from remote using GitHub API
+          curl -s -H "Authorization: Bearer $GH_PAT" \
+            "https://api.github.com/repos/${{ github.repository }}/branches" | \
+            jq -r '.[].name' > branches.txt
+
+          echo "📋 Available branches:"
+          cat branches.txt
+          echo ""
+
+          # Check if admin branch exists
+          if grep -q "^${BRANCH}$" branches.txt; then
+            echo "✅ Branch '$BRANCH' exists!"
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Branch '$BRANCH' does not exist!"
+            echo ""
+            echo "📝 Available branches are:"
+            cat branches.txt | head -10
+            if [ $(cat branches.txt | wc -l) -gt 10 ]; then
+              echo "... and $(( $(cat branches.txt | wc -l) - 10 )) more"
+            fi
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      # Show validation result
+      - name: 📊 Validation Summary
+        if: success()
+        run: |
+          echo "========================================="
+          echo "✅ BRANCH VALIDATION PASSED"
+          echo "========================================="
+          echo "Branch: admin"
+          echo "Environment: Preview (Admin Panel)"
+          echo "========================================="
+
+  deploy:
+    needs: validate-branch
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    outputs:
+      project_name: thieponline
+      deployment_url: ${{ steps.cloudflare.outputs.url }}
+
+    steps:
+      # 1. Checkout code from admin branch
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: admin
+          fetch-depth: 0
+
+      # 2. Setup Node.js
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Install dependencies
+      - name: 📦 Install dependencies
+        run: |
+          echo "Installing npm dependencies..."
+          npm ci
+          echo "✅ Dependencies installed"
+
+      # 4. Build Vite React app
+      - name: 🏗️ Build Vite React App
+        env:
+          NODE_ENV: production
+        run: |
+          echo "Building Vite React application..."
+          npm run build
+
+          echo "✅ Build complete"
+
+          # Display build output structure
+          echo ""
+          echo "📁 Build output (dist/):"
+          find dist -type f | sort
+
+          # Check build size
+          echo ""
+          echo "📊 Build size:"
+          du -sh dist/
+
+          # Count files
+          echo "📈 Total files: $(find dist -type f | wc -l)"
+
+      # 5. Set Project Name for Admin Panel
+      - name: 📝 Set Project Name
+        id: set-project
+        run: |
+          # Use same project as main
+          PROJECT_NAME="thieponline"
+          echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Project Name: $PROJECT_NAME"
+          echo "📍 Branch: admin"
+
+      # 6. Create Cloudflare Pages Project (if not exists)
+      - name: 📦 Create Cloudflare Pages Project
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT_NAME: thieponline
+        run: |
+          echo "Checking if project '$PROJECT_NAME' exists..."
+
+          # Check if project exists
+          PROJECT_CHECK=$(curl -s -X GET \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          if echo "$PROJECT_CHECK" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+            echo "✅ Project '$PROJECT_NAME' already exists"
+          else
+            echo "📦 Creating new project '$PROJECT_NAME'..."
+
+            # Create new project with main as production branch
+            CREATE_RESPONSE=$(curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"name\": \"$PROJECT_NAME\",
+                \"production_branch\": \"main\",
+                \"build_config\": {
+                  \"build_command\": \"npm run build\",
+                  \"destination_dir\": \"dist\",
+                  \"root_dir\": \"/\"
+                }
+              }")
+
+            # Check if creation was successful
+            if echo "$CREATE_RESPONSE" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+              echo "✅ Project '$PROJECT_NAME' created successfully"
+              echo "📍 Production branch: main"
+            else
+              echo "⚠️ Failed to create project"
+              echo "Response:"
+              echo "$CREATE_RESPONSE"
+              echo ""
+              echo "ℹ️ Continuing anyway - deployment may still work"
+            fi
+          fi
+
+      # 7. Deploy to Cloudflare Pages
+      - name: 🚀 Deploy to Cloudflare Pages
+        id: cloudflare
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: thieponline
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: admin
+          wranglerVersion: '4'
+
+      # 8. Setup custom domain for admin panel
+      - name: 🌐 Configure Custom Domain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          PROJECT_NAME: thieponline
+        run: |
+          # Hardcode domain
+          ROOT_DOMAIN="thieponline.org"
+          SUBDOMAIN="admin"
+          CUSTOM_DOMAIN="${SUBDOMAIN}.${ROOT_DOMAIN}"
+
+          echo "🌐 Setting up custom domain for Admin Panel"
+          echo "📍 Domain: $CUSTOM_DOMAIN"
+
+          # Check if domain already exists
+          DOMAINS=$(curl -s -X GET \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          if echo "$DOMAINS" | grep -q "\"$CUSTOM_DOMAIN\""; then
+            echo "✅ Domain already configured"
+            DOMAIN_CONFIGURED=true
+          else
+            # Add custom domain
+            echo "Adding custom domain..."
+
+            ADD_DOMAIN_RESPONSE=$(curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\": \"$CUSTOM_DOMAIN\"}")
+
+            # Check if domain was added successfully
+            if echo "$ADD_DOMAIN_RESPONSE" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+              echo "✅ Custom domain added successfully"
+              DOMAIN_CONFIGURED=true
+            else
+              echo "❌ Failed to add custom domain"
+              echo "Response:"
+              echo "$ADD_DOMAIN_RESPONSE"
+              echo ""
+              echo "⚠️ Please check your domain configuration"
+              echo "ℹ️ Skipping DNS configuration..."
+              DOMAIN_CONFIGURED=false
+            fi
+          fi
+
+          # Setup DNS CNAME record only if domain is configured
+          if [ "$DOMAIN_CONFIGURED" = true ]; then
+            echo "📝 Configuring DNS..."
+          else
+            echo "⏭️ Skipping DNS configuration due to domain error"
+            exit 0
+          fi
+
+          # Cloudflare Pages URL to point to (admin branch)
+          CF_PAGES_URL="admin.${PROJECT_NAME}.pages.dev"
+          echo "📍 Will point to: $CF_PAGES_URL"
+
+          # Check existing DNS records
+          EXISTING_DNS=$(curl -s -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$CUSTOM_DOMAIN&type=CNAME" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          if echo "$EXISTING_DNS" | grep -q "\"count\":0"; then
+            # Create new CNAME record
+            curl -X POST \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"type\": \"CNAME\",
+                \"name\": \"$CUSTOM_DOMAIN\",
+                \"content\": \"$CF_PAGES_URL\",
+                \"ttl\": 1,
+                \"proxied\": true
+              }"
+            echo "✅ DNS record created"
+          else
+            echo "✅ DNS record already exists"
+          fi
+
+      # 9. Output summary
+      - name: 📊 Deployment Summary
+        if: always()
+        run: |
+          ROOT_DOMAIN="thieponline.org"
+          PROJECT_NAME="thieponline"
+          SUBDOMAIN="admin"
+
+          CF_URL="https://admin.${PROJECT_NAME}.pages.dev"
+          CUSTOM_URL="https://${SUBDOMAIN}.${ROOT_DOMAIN}"
+
+          echo "========================================="
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ DEPLOYMENT SUCCESSFUL!"
+          else
+            echo "⚠️ DEPLOYMENT COMPLETED WITH WARNINGS"
+          fi
+          echo "========================================="
+          echo ""
+          echo "📦 Project: $PROJECT_NAME"
+          echo "🌿 Branch: admin"
+          echo "🌐 Environment: Admin Panel (Preview)"
+          echo "📅 Time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+          echo "🔗 Access URLs:"
+          echo "  • Cloudflare Pages: $CF_URL"
+          echo "  • Custom Domain: $CUSTOM_URL"
+          echo "  • Deployment URL: ${{ steps.cloudflare.outputs.url }}"
+          echo ""
+          echo "📝 Deployment ID: ${{ steps.cloudflare.outputs.id }}"
+          echo "========================================="
+
+  # Job: Send Telegram Notification
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: 📱 Send Telegram Notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Skip if credentials not configured
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "ℹ️ Telegram credentials not configured, skipping notification..."
+            exit 0
+          fi
+
+          ROOT_DOMAIN="thieponline.org"
+          PROJECT_NAME="thieponline"
+          SUBDOMAIN="admin"
+
+          CF_URL="https://admin.${PROJECT_NAME}.pages.dev"
+          CUSTOM_URL="https://${SUBDOMAIN}.${ROOT_DOMAIN}"
+          ENV_TYPE="Admin Panel"
+          ENV_ICON="🔐"
+
+          # Get commit message (truncate if too long)
+          COMMIT_MSG="${{ github.event.head_commit.message || 'Manual trigger' }}"
+          COMMIT_SHORT=$(echo "$COMMIT_MSG" | head -n 1 | cut -c 1-100)
+
+          # Build unique identifier for this deployment
+          DEPLOY_KEY="${PROJECT_NAME}:admin:${{ github.sha }}"
+          GITHUB_ACTOR="${{ github.actor }}"
+          DEPLOY_ID="${{ needs.deploy.outputs.deployment_url }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # Get last message from chat to check for duplicates
+          echo "🔍 Checking for duplicate notifications..."
+          LAST_MESSAGES=$(curl -s -X GET "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=10&offset=-1")
+
+          # Check if deployment already notified
+          if echo "$LAST_MESSAGES" | grep -q "$DEPLOY_KEY"; then
+            echo "ℹ️ Deployment already notified (duplicate detected), skipping..."
+            exit 0
+          fi
+
+          # Build message with proper escaping
+          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+          MESSAGE="🎉 <b>Admin Panel Deployment Successful!</b>%0A%0A"
+          MESSAGE="${MESSAGE}${ENV_ICON} <b>Environment:</b> ${ENV_TYPE}%0A"
+          MESSAGE="${MESSAGE}📦 <b>Project:</b> ${PROJECT_NAME}%0A"
+          MESSAGE="${MESSAGE}🌿 <b>Branch:</b> <code>admin</code>%0A"
+          MESSAGE="${MESSAGE}👤 <b>By:</b> @${GITHUB_ACTOR}%0A"
+          MESSAGE="${MESSAGE}📅 <b>Time:</b> ${TIMESTAMP}%0A%0A"
+          MESSAGE="${MESSAGE}🔗 <b>Access URLs:</b>%0A"
+          MESSAGE="${MESSAGE}• <a href=\"${CF_URL}\">Cloudflare Pages</a>: <code>${CF_URL}</code>%0A"
+          MESSAGE="${MESSAGE}• <a href=\"${CUSTOM_URL}\">Custom Domain</a>: <code>${CUSTOM_URL}</code>%0A%0A"
+          MESSAGE="${MESSAGE}📝 <b>Commit:</b> ${COMMIT_SHORT}%0A"
+          MESSAGE="${MESSAGE}🔖 <b>Deployment:</b> <code>${DEPLOY_ID}</code>%0A%0A"
+          MESSAGE="${MESSAGE}🔗 <a href=\"${WORKFLOW_URL}\">View Workflow Run</a>%0A%0A"
+          MESSAGE="${MESSAGE}<code>${DEPLOY_KEY}</code>"
+
+          # Send to Telegram with error handling
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            -d "text=${MESSAGE}" \
+            -d "disable_web_page_preview=false")
+
+          # Check if message sent successfully
+          if echo "$RESPONSE" | grep -q '"ok":true'; then
+            echo "✅ Telegram notification sent successfully!"
+          else
+            echo "⚠️ Failed to send Telegram notification"
+            echo "Response: $RESPONSE"
+          fi
