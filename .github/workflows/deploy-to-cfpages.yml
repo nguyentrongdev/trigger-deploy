@@ -16,63 +16,6 @@ on:
         type: string
 
 jobs:
-  validate-branch:
-    runs-on: ubuntu-latest
-    outputs:
-      branch_exists: ${{ steps.check.outputs.exists }}
-      branch_name: ${{ steps.check.outputs.branch }}
-
-    steps:
-      # Validate branch existence
-      - name: 🔍 Validate Branch
-        id: check
-        env:
-          BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          echo "Checking if branch exists: $BRANCH"
-
-          # Fetch all branches from remote using GitHub API
-          curl -s -H "Authorization: Bearer $GH_PAT" \
-            "https://api.github.com/repos/nguyentrongdev/thieponline/branches" | \
-            jq -r '.[].name' > branches.txt
-
-          echo "📋 Available branches:"
-          cat branches.txt
-          echo ""
-
-          # Check if input branch exists
-          if grep -q "^${BRANCH}$" branches.txt; then
-            echo "✅ Branch '$BRANCH' exists!"
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Branch '$BRANCH' does not exist!"
-            echo ""
-            echo "🔍 Did you mean one of these?"
-            # Suggest similar branches
-            grep -i "$BRANCH" branches.txt || echo "No similar branches found"
-            echo ""
-            echo "📝 Available branches are:"
-            cat branches.txt | head -10
-            if [ $(cat branches.txt | wc -l) -gt 10 ]; then
-              echo "... and $(( $(cat branches.txt | wc -l) - 10 )) more"
-            fi
-            echo "exists=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-      # Show validation result
-      - name: 📊 Validation Summary
-        if: success()
-        run: |
-          echo "========================================="
-          echo "✅ BRANCH VALIDATION PASSED"
-          echo "========================================="
-          echo "Branch: ${{ github.event.inputs.branch || github.ref_name }}"
-          echo "Environment: Production"
-          echo "========================================="
-
   deploy:
     runs-on: ubuntu-latest
     permissions:
