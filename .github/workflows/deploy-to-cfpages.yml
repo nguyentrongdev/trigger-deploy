@@ -74,8 +74,6 @@ jobs:
           echo "========================================="
 
   deploy:
-    needs: validate-branch
-    if: success()
     runs-on: ubuntu-latest
     permissions:
       contents: read
