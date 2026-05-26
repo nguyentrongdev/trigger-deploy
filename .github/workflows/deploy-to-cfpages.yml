@@ -348,6 +348,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          wranglerVersion: "4"
           packageManager: npm
           command: |
             pages deploy dist --project-name=thieponline --branch=${{ github.event.inputs.branch || github.ref_name }} --commit-dirty=true
