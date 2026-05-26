@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch name to deploy (e.g., main, develop, feature/new-feature)'
+        description: "Branch name to deploy (e.g., main, develop, feature/new-feature)"
         required: true
-        default: 'main'
+        default: "main"
         type: string
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
     outputs:
       branch_exists: ${{ steps.check.outputs.exists }}
       branch_name: ${{ steps.check.outputs.branch }}
-    
+
     steps:
       # Validate branch existence
       - name: 🔍 Validate Branch
@@ -31,16 +31,16 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           echo "Checking if branch exists: $BRANCH"
-          
+
           # Fetch all branches from remote using GitHub API
           curl -s -H "Authorization: Bearer $GH_PAT" \
             "https://api.github.com/repos/nguyentrongdev/thieponline/branches" | \
             jq -r '.[].name' > branches.txt
-          
+
           echo "📋 Available branches:"
           cat branches.txt
           echo ""
-          
+
           # Check if input branch exists
           if grep -q "^${BRANCH}$" branches.txt; then
             echo "✅ Branch '$BRANCH' exists!"
@@ -61,7 +61,7 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
             exit 1
           fi
-      
+
       # Show validation result
       - name: 📊 Validation Summary
         if: success()
@@ -82,8 +82,9 @@ jobs:
       deployments: write
     outputs:
       project_name: thieponline
-      deployment_url: ${{ steps.cloudflare.outputs.url }}
-    
+      deployment_url: ${{ steps.cloudflare.outputs.deployment-url }}
+      deployment_id: ${{ steps.cloudflare.outputs.pages-deployment-id }}
+
     steps:
       # 1. Checkout code từ branch được validate
       - name: 📥 Checkout repository
@@ -92,16 +93,16 @@ jobs:
           repository: nguyentrongdev/thieponline
           ref: ${{ github.event.inputs.branch || github.ref }}
           token: ${{ secrets.GH_PAT }}
-          fetch-depth: 0  # Fetch all history for all branches
-      
+          fetch-depth: 0 # Fetch all history for all branches
+
       # 2. Prepare deployment directory
       - name: 📦 Prepare deployment files
         run: |
           echo "Preparing files for deployment..."
-          
+
           # Tạo thư mục dist
           mkdir -p dist
-          
+
           # Copy TẤT CẢ files và folders, TRỪ những thứ không cần
           # Sử dụng rsync để copy với exclude
           rsync -av \
@@ -118,39 +119,39 @@ jobs:
             --exclude='package.json' \
             --exclude='package-lock.json' \
             ./ dist/
-          
+
           echo "✅ All files copied except (.github, .prettierrc, README.md)"
-          
+
           # Hiển thị structure của dist
           echo ""
           echo "📁 Files to deploy:"
           find dist -type f | sort
-          
+
           # Kiểm tra kích thước
           echo ""
           echo "📊 Total size:"
           du -sh dist/
-          
+
           # Count files
           echo "📈 Total files: $(find dist -type f | wc -l)"
-      
+
       # 3. Setup Node.js for minification tools
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      
+          node-version: "20"
+
       # 4. Install minification tools
       - name: 📦 Install minification tools
         run: |
           npm install -g html-minifier-terser clean-css-cli terser
           echo "✅ Minification tools installed"
-      
+
       # 5. Optimize files (HTML, CSS, JS with minification)
       - name: 🚀 Minify static files
         run: |
           echo "Minifying HTML, CSS, JS files..."
-          
+
           # Minify HTML files
           echo "📄 Minifying HTML files..."
           find dist -name "*.html" -type f | while read file; do
@@ -167,14 +168,14 @@ jobs:
               --minify-js true \
               "$file" -o "$file"
           done
-          
+
           # Minify CSS files
           echo "🎨 Minifying CSS files..."
           find dist -name "*.css" -type f | while read file; do
             echo "  Processing: $file"
             cleancss -o "$file" "$file"
           done
-          
+
           # Minify JS files
           echo "⚡ Minifying JS files..."
           find dist -name "*.js" -type f | while read file; do
@@ -184,33 +185,33 @@ jobs:
               --mangle \
               --output "$file"
           done
-          
+
           echo "✅ Minification complete"
-          
+
           # Show size reduction
           echo ""
           echo "📊 Final size after minification:"
           du -sh dist/
-      
+
       # 6. Generate meta JSON payload
       - name: 🧾 Generate meta JSON payload
         env:
           ADMIN_TOKEN_API: ${{ secrets.ADMIN_TOKEN_API }}
         run: |
           echo "📖 Extracting meta information from HTML..."
-          
+
           HTML_FILE="dist/index.html"
-          
+
           if [ ! -f "$HTML_FILE" ]; then
             echo "⚠️ HTML file not found: $HTML_FILE"
             echo "ℹ️ Skipping meta extraction..."
             exit 0
           fi
-          
+
           # Install cheerio for HTML parsing
           echo "📦 Installing cheerio..."
           npm install cheerio --silent
-          
+
           # Run Node.js to parse HTML with cheerio
           echo "🔍 Parsing HTML với Node.js + Cheerio..."
           EXTRACTED_META=$(node -e "
@@ -234,13 +235,13 @@ jobs:
             };
             console.log(JSON.stringify(metadata, null, 2));
           ")
-          
+
           if [ $? -ne 0 ]; then
             echo "❌ Failed to parse HTML file"
             echo "ℹ️ Skipping meta extraction..."
             exit 0
           fi
-          
+
           echo "✅ HTML parsed successfully"
           echo ""
           echo "📋 EXTRACTED METADATA:"
@@ -248,7 +249,7 @@ jobs:
           echo "$EXTRACTED_META" | jq '.'
           echo "========================================="
           echo ""
-          
+
           # Extract values from JSON
           TITLE=$(echo "$EXTRACTED_META" | jq -r '.title // ""')
           DESCRIPTION=$(echo "$EXTRACTED_META" | jq -r '.description // ""')
@@ -262,29 +263,29 @@ jobs:
           ZALO_OG_IMAGE=$(echo "$EXTRACTED_META" | jq -r '.zaloOgImage // ""')
           IMAGE_SRC=$(echo "$EXTRACTED_META" | jq -r '.imageSrc // ""')
           FIRST_IMG_SRC=$(echo "$EXTRACTED_META" | jq -r '.firstImgSrc // ""')
-          
+
           # Fallback logic
           NAME="${TITLE:-Thiệp Online}"
           DESCRIPTION="${DESCRIPTION:-Thiệp Online - Website thiệp điện tử}"
           OG_TITLE="${OG_TITLE:-$TITLE}"
           OG_DESCRIPTION="${OG_DESCRIPTION:-$DESCRIPTION}"
           OG_TYPE="${OG_TYPE:-website}"
-          
+
           # Use image_src, if empty use first img src, if still empty use og:image
           if [ -z "$IMAGE_SRC" ]; then
             IMAGE_SRC="${FIRST_IMG_SRC:-$OG_IMAGE}"
           fi
-          
+
           # Determine subdomain and URL based on branch
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
-          
+
           if [ "$BRANCH_NAME" == "main" ]; then
             FINAL_OG_URL="${OG_URL:-https://thieponline.org}"
           else
             FINAL_OG_URL="${OG_URL:-https://${SUBDOMAIN}.thieponline.org}"
           fi
-          
+
           # Build JSON payload
           JSON_PAYLOAD=$(jq -n \
             --arg name "$NAME" \
@@ -313,30 +314,30 @@ jobs:
               zaloOgImage: $zaloOgImage,
               imageSrc: $imageSrc
             }')
-          
+
           echo ""
           echo "📋 FINAL META PAYLOAD:"
           echo "========================================="
           echo "$JSON_PAYLOAD" | jq '.'
           echo "========================================="
           echo ""
-          
+
           echo "$JSON_PAYLOAD" > meta-payload.json
           echo "💾 Payload saved to meta-payload.json"
-          
+
           # Cleanup
           rm -f extract-meta.js
-          
+
           if [ -z "$ADMIN_TOKEN_API" ]; then
             echo "⚠️ ADMIN_TOKEN_API not configured, skipping API call..."
             exit 0
           fi
-          
+
           echo ""
           echo "📡 Sending POST request to: https://api.thieponline.org/admin/templates"
           echo "🔑 Authorization: Bearer ***HIDDEN***"
           echo ""
-          
+
           API_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             'https://api.thieponline.org/admin/templates' \
             -H 'Content-Type: application/json; charset=utf-8' \
@@ -344,10 +345,10 @@ jobs:
             -H "Authorization: Bearer $ADMIN_TOKEN_API" \
             -H 'User-Agent: GitHub-Actions' \
             --data-raw "$JSON_PAYLOAD")
-          
+
           HTTP_CODE=$(echo "$API_RESPONSE" | tail -n1)
           RESPONSE_BODY=$(echo "$API_RESPONSE" | sed '$d')
-          
+
           echo "📊 API RESPONSE DEBUG:"
           echo "========================================="
           echo "Status Code: $HTTP_CODE"
@@ -359,7 +360,7 @@ jobs:
           echo "$RESPONSE_BODY" | jq '.' 2>/dev/null || echo "$RESPONSE_BODY"
           echo "========================================="
           echo ""
-          
+
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             echo "✅ Meta information sent successfully!"
           elif [ "$HTTP_CODE" == "401" ]; then
@@ -377,7 +378,7 @@ jobs:
           else
             echo "⚠️ API request failed with status code: $HTTP_CODE"
           fi
-      
+
       # 7. Set Project Name (Fixed)
       - name: 📝 Set Project Name
         id: set-project
@@ -387,7 +388,7 @@ jobs:
           echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
           echo "✅ Project Name: $PROJECT_NAME"
           echo "📍 Branch: ${{ github.event.inputs.branch || github.ref_name }}"
-      
+
       # 8. Create Cloudflare Pages Project (if not exists)
       - name: 📦 Create Cloudflare Pages Project
         env:
@@ -396,18 +397,18 @@ jobs:
           PROJECT_NAME: thieponline
         run: |
           echo "Checking if project '$PROJECT_NAME' exists..."
-          
+
           # Check if project exists
           PROJECT_CHECK=$(curl -s -X GET \
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json")
-          
+
           if echo "$PROJECT_CHECK" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
             echo "✅ Project '$PROJECT_NAME' already exists"
           else
             echo "📦 Creating new project '$PROJECT_NAME'..."
-            
+
             # Create new project with main as production branch
             CREATE_RESPONSE=$(curl -s -X POST \
               "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects" \
@@ -422,7 +423,7 @@ jobs:
                   \"root_dir\": \"/\"
                 }
               }")
-            
+
             # Check if creation was successful
             if echo "$CREATE_RESPONSE" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
               echo "✅ Project '$PROJECT_NAME' created successfully"
@@ -436,20 +437,17 @@ jobs:
               echo "ℹ️ Continuing anyway - deployment may still work"
             fi
           fi
-      
-      # 9. Deploy to Cloudflare Pages
+
+      # 9. Deploy to Cloudflare Pages (using wrangler-action - pages-action is deprecated)
       - name: 🚀 Deploy to Cloudflare Pages
         id: cloudflare
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: thieponline
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.event.inputs.branch || github.ref_name }}
-          wranglerVersion: '4'
-      
+          wranglerVersion: "3"
+          command: pages deploy dist --project-name=thieponline --branch=${{ github.event.inputs.branch || github.ref_name }} --commit-dirty=true
+
       # 10. Setup custom domain for all branches
       - name: 🌐 Configure Custom Domain
         env:
@@ -460,15 +458,15 @@ jobs:
         run: |
           # Hardcode domain
           ROOT_DOMAIN="thieponline.org"
-          
+
           echo "🌐 Using hardcoded domain: $ROOT_DOMAIN"
           echo "✅ Domain is confirmed to exist in Cloudflare"
-          
+
           # Normalize branch name for subdomain
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           # Create slug: convert / to -, _ to -, and lowercase
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
-          
+
           # Create custom domain based on branch name
           if [ "$BRANCH_NAME" == "main" ]; then
             # Main branch uses root domain or www subdomain
@@ -477,20 +475,20 @@ jobs:
             # Other branches use branch name as subdomain
             CUSTOM_DOMAIN="${SUBDOMAIN}.${ROOT_DOMAIN}"
           fi
-          
+
           # Display domain info (bypass GitHub masking)
           echo "🌐 Setting up custom domain for branch: $BRANCH_NAME"
           echo "📍 Subdomain prefix: $SUBDOMAIN"
           DOMAIN_LENGTH=${#CUSTOM_DOMAIN}
           echo "📏 Domain length: $DOMAIN_LENGTH characters"
           echo "🔗 Full domain: $CUSTOM_DOMAIN"
-          
+
           # Check if domain already exists
           DOMAINS=$(curl -s -X GET \
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json")
-          
+
           if echo "$DOMAINS" | grep -q "\"$CUSTOM_DOMAIN\""; then
             echo "✅ Domain already configured"
             DOMAIN_CONFIGURED=true
@@ -502,13 +500,13 @@ jobs:
             echo "  - Project Name: $PROJECT_NAME"
             echo "  - Custom Domain: $CUSTOM_DOMAIN"
             echo "  - API Endpoint: https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains"
-            
+
             ADD_DOMAIN_RESPONSE=$(curl -s -X POST \
               "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PROJECT_NAME/domains" \
               -H "Authorization: Bearer $CF_API_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"name\": \"$CUSTOM_DOMAIN\"}")
-            
+
             # Check if domain was added successfully
             if echo "$ADD_DOMAIN_RESPONSE" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
               echo "✅ Custom domain added successfully"
@@ -523,7 +521,7 @@ jobs:
               DOMAIN_CONFIGURED=false
             fi
           fi
-          
+
           # Setup DNS CNAME record only if domain is configured
           if [ "$DOMAIN_CONFIGURED" = true ]; then
             echo "📝 Configuring DNS..."
@@ -531,7 +529,7 @@ jobs:
             echo "⏭️ Skipping DNS configuration due to domain error"
             exit 0
           fi
-          
+
           # Extract subdomain and root domain
           if [[ "$CUSTOM_DOMAIN" == *"."*"."* ]]; then
             # It's a subdomain
@@ -540,22 +538,22 @@ jobs:
             # It's a root domain
             RECORD_NAME="@"
           fi
-          
+
           # Determine Cloudflare Pages URL to point to
           if [ "$BRANCH_NAME" == "main" ]; then
             CF_PAGES_URL="${PROJECT_NAME}.pages.dev"
           else
             CF_PAGES_URL="${SUBDOMAIN}.${PROJECT_NAME}.pages.dev"
           fi
-          
+
           echo "📍 Will point to: $CF_PAGES_URL"
-          
+
           # Check existing DNS records
           EXISTING_DNS=$(curl -s -X GET \
             "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$CUSTOM_DOMAIN&type=CNAME" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json")
-          
+
           if echo "$EXISTING_DNS" | grep -q "\"count\":0"; then
             # Create new CNAME record
             curl -X POST \
@@ -573,19 +571,19 @@ jobs:
           else
             echo "✅ DNS record already exists"
           fi
-      
+
       # 11. Output summary
       - name: 📊 Deployment Summary
         if: always()
         run: |
           # Hardcode domain
           ROOT_DOMAIN="thieponline.org"
-          
+
           PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           # Create slug: convert / to -, _ to -, and lowercase
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
-          
+
           # Determine URLs
           if [ "$BRANCH_NAME" == "main" ]; then
             CF_URL="https://${PROJECT_NAME}.pages.dev"
@@ -596,7 +594,7 @@ jobs:
             CUSTOM_URL="https://${SUBDOMAIN}.${ROOT_DOMAIN}"
             ENV_TYPE="Preview"
           fi
-          
+
           echo "========================================="
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ DEPLOYMENT SUCCESSFUL!"
@@ -612,23 +610,23 @@ jobs:
           echo ""
           echo "🔗 Access URLs:"
           echo "  • Cloudflare Pages: $CF_URL"
-          
+
           if [ -n "$ROOT_DOMAIN" ]; then
             echo "  • Custom Domain: $CUSTOM_URL"
           fi
-          
-          echo "  • Deployment URL: ${{ steps.cloudflare.outputs.url }}"
-          
+
+          echo "  • Deployment URL: ${{ steps.cloudflare.outputs.deployment-url }}"
+
           echo ""
-          echo "📝 Deployment ID: ${{ steps.cloudflare.outputs.id }}"
+          echo "📝 Deployment ID: ${{ steps.cloudflare.outputs.pages-deployment-id }}"
           echo "========================================="
-  
+
   # Job: Send Telegram Notification
   notify:
     needs: deploy
     runs-on: ubuntu-latest
     if: success()
-    
+
     steps:
       - name: 📱 Send Telegram Notification
         env:
@@ -640,15 +638,15 @@ jobs:
             echo "ℹ️ Telegram credentials not configured, skipping notification..."
             exit 0
           fi
-          
+
           # Hardcode domain
           ROOT_DOMAIN="thieponline.org"
-          
+
           PROJECT_NAME="thieponline"
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           # Create slug: convert / to -, _ to -, and lowercase
           SUBDOMAIN=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]')
-          
+
           # Determine URLs
           if [ "$BRANCH_NAME" == "main" ]; then
             CF_URL="https://${PROJECT_NAME}.pages.dev"
@@ -661,27 +659,27 @@ jobs:
             ENV_TYPE="Preview"
             ENV_ICON="🔍"
           fi
-          
+
           # Get commit message (truncate if too long)
           COMMIT_MSG="${{ github.event.head_commit.message || 'Manual trigger' }}"
           COMMIT_SHORT=$(echo "$COMMIT_MSG" | head -n 1 | cut -c 1-100)
-          
+
           # Build unique identifier for this deployment
           DEPLOY_KEY="${PROJECT_NAME}:${BRANCH_NAME}:${{ github.sha }}"
           GITHUB_ACTOR="${{ github.actor }}"
           DEPLOY_ID="${{ needs.deploy.outputs.deployment_url }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          
+
           # Get last message from chat to check for duplicates
           echo "🔍 Checking for duplicate notifications..."
           LAST_MESSAGES=$(curl -s -X GET "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=10&offset=-1")
-          
+
           # Check if deployment already notified
           if echo "$LAST_MESSAGES" | grep -q "$DEPLOY_KEY"; then
             echo "ℹ️ Deployment already notified (duplicate detected), skipping..."
             exit 0
           fi
-          
+
           # Build message with proper escaping
           TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
           MESSAGE="🎉 <b>Deployment Successful!</b>%0A%0A"
@@ -697,14 +695,14 @@ jobs:
           MESSAGE="${MESSAGE}🔖 <b>Deployment:</b> <code>${DEPLOY_ID}</code>%0A%0A"
           MESSAGE="${MESSAGE}🔗 <a href=\"${WORKFLOW_URL}\">View Workflow Run</a>%0A%0A"
           MESSAGE="${MESSAGE}<code>${DEPLOY_KEY}</code>"
-          
+
           # Send to Telegram with error handling
           RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "parse_mode=HTML" \
             -d "text=${MESSAGE}" \
             -d "disable_web_page_preview=false")
-          
+
           # Check if message sent successfully
           if echo "$RESPONSE" | grep -q '"ok":true'; then
             echo "✅ Telegram notification sent successfully!"
