@@ -80,8 +80,8 @@ jobs:
       deployments: write
     outputs:
       project_name: thieponline
-      deployment_url: ${{ steps.cloudflare.outputs.url }}
-      deployment_alias: ${{ steps.cloudflare.outputs.alias }}
+      deployment_url: ${{ steps.cloudflare.outputs.deployment-url }}
+      deployment_alias: ${{ steps.cloudflare.outputs.pages-deployment-alias-url }}
       custom_url: ${{ steps.domain.outputs.custom_url }}
 
     steps:
@@ -198,15 +198,17 @@ jobs:
       # 7. Deploy to Cloudflare Pages
       - name: 🚀 Deploy to Cloudflare Pages
         id: cloudflare
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v3
+        env:
+          DEPLOY_BRANCH: ${{ needs.validate-branch.outputs.branch_name }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: thieponline
-          directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ needs.validate-branch.outputs.branch_name }}
           wranglerVersion: '4'
+          packageManager: npm
+          command: |
+            pages deploy dist --project-name=thieponline --branch="$DEPLOY_BRANCH" --commit-dirty=true
 
       # 8. Setup custom domain for the deployed branch: [branch name].[ROOT_DOMAIN]
       - name: 🌐 Configure Custom Domain
@@ -217,7 +219,7 @@ jobs:
           CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           PROJECT_NAME: thieponline
           BRANCH: ${{ needs.validate-branch.outputs.branch_name }}
-          DEPLOYMENT_ALIAS: ${{ steps.cloudflare.outputs.alias }}
+          DEPLOYMENT_ALIAS: ${{ steps.cloudflare.outputs.pages-deployment-alias-url }}
         run: |
           # Hardcode root domain
           ROOT_DOMAIN="thieponline.org"
@@ -321,9 +323,9 @@ jobs:
         if: always()
         env:
           BRANCH: ${{ needs.validate-branch.outputs.branch_name }}
-          DEPLOYMENT_URL: ${{ steps.cloudflare.outputs.url }}
-          DEPLOYMENT_ALIAS: ${{ steps.cloudflare.outputs.alias }}
-          DEPLOYMENT_ID: ${{ steps.cloudflare.outputs.id }}
+          DEPLOYMENT_URL: ${{ steps.cloudflare.outputs.deployment-url }}
+          DEPLOYMENT_ALIAS: ${{ steps.cloudflare.outputs.pages-deployment-alias-url }}
+          DEPLOYMENT_ID: ${{ steps.cloudflare.outputs.pages-deployment-id }}
           CUSTOM_URL: ${{ steps.domain.outputs.custom_url }}
           JOB_STATUS: ${{ job.status }}
         run: |

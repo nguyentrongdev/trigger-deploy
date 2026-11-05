@@ -76,7 +76,7 @@ jobs:
       deployments: write
     outputs:
       project_name: thieponline
-      deployment_url: ${{ steps.cloudflare.outputs.url }}
+      deployment_url: ${{ steps.cloudflare.outputs.deployment-url }}
 
     steps:
       # 1. Checkout code from admin branch
@@ -190,15 +190,15 @@ jobs:
       # 7. Deploy to Cloudflare Pages
       - name: 🚀 Deploy to Cloudflare Pages
         id: cloudflare
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: thieponline
-          directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: admin
           wranglerVersion: '4'
+          packageManager: npm
+          command: |
+            pages deploy dist --project-name=thieponline --branch=admin --commit-dirty=true
 
       # 8. Setup custom domain for admin panel
       - name: 🌐 Configure Custom Domain
@@ -313,9 +313,9 @@ jobs:
           echo "🔗 Access URLs:"
           echo "  • Cloudflare Pages: $CF_URL"
           echo "  • Custom Domain: $CUSTOM_URL"
-          echo "  • Deployment URL: ${{ steps.cloudflare.outputs.url }}"
+          echo "  • Deployment URL: ${{ steps.cloudflare.outputs.deployment-url }}"
           echo ""
-          echo "📝 Deployment ID: ${{ steps.cloudflare.outputs.id }}"
+          echo "📝 Deployment ID: ${{ steps.cloudflare.outputs.pages-deployment-id }}"
           echo "========================================="
 
   # Job: Send Telegram Notification
